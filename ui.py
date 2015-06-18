@@ -33,7 +33,7 @@ class Cli(object):
                 print(j,' ' ,end='')
             print('--')
 
-    prompt = 'SNH> '
+    prompt = 'SNHx> '
     command_dict = {'show port': print_port_info,\
                     'show topo': print_topo,\
                     'show path': print_path}
@@ -46,7 +46,8 @@ class Cli(object):
                 pass
             elif command == 'halt':
                 return False
-                break
+                # # sys.exit(0)
+                # break
             elif command in cls.command_dict:
                 cls.command_dict[command]()
             else:
