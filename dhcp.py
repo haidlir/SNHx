@@ -26,9 +26,13 @@ from ryu.lib.packet import ipv4
 from ryu.lib.packet import udp
 from ryu.lib.packet import dhcp
 
+from config import Config
+from collector import Collector
+from lib import ARPDets
+
 class DHCPServer(object):
 
-    hw_addr = '0a:e4:1c:d1:3e:44' # ganti yang cantik !!!
+    hw_addr = Config.controller_macAddr
     dhcp_server = {}
     netmask = '255.255.255.0'
     dns = '8.8.8.8'
@@ -51,7 +55,11 @@ class DHCPServer(object):
                     return addrconv.ipv4.bin_to_text(option.value)
 
     @classmethod
-    def assemble_ack(cls, pkt, datapath):
+    def add_arp(cls, ip_addr, mac_addr, datapath, port):
+        Collector.arp_table[ip_addr] = ARPDets(datapath.id, port, mac_addr)
+
+    @classmethod
+    def assemble_ack(cls, pkt, datapath, port):
         req_eth = pkt.get_protocol(ethernet.ethernet)
         req_ipv4 = pkt.get_protocol(ipv4.ipv4)
         req_udp = pkt.get_protocol(udp.udp)
@@ -80,7 +88,7 @@ class DHCPServer(object):
         if got_ip is None:
             log.warn("%s asked for un-offered %s", src, wanted_ip)
             # cls.nak(event) # nak 
-            return              
+            return
 
         req[0].options.option_list.remove(next(opt for opt in req[0].options.option_list if opt.tag == 53))
         req[0].options.option_list.insert(0, dhcp.option(tag=1, value=cls.bin_netmask))
@@ -103,6 +111,10 @@ class DHCPServer(object):
                                        xid=req[0].xid,
                                        options=req[0].options))
         # cls.logger.info("ASSEMBLED ACK: %s" % ack_pkt)
+
+
+        # print(wanted_ip, src, datapath, port)
+        cls.add_arp(wanted_ip, src, datapath, port)
         return ack_pkt
 
     @classmethod
@@ -186,7 +198,7 @@ class DHCPServer(object):
         if dhcp_state == 'DHCPDISCOVER':
             cls._send_packet(datapath, port, cls.assemble_offer(pkt, datapath))
         elif dhcp_state == 'DHCPREQUEST':
-            cls._send_packet(datapath, port, cls.assemble_ack(pkt, datapath))
+            cls._send_packet(datapath, port, cls.assemble_ack(pkt, datapath, port))
         else:
             return
 

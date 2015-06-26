@@ -22,3 +22,9 @@ class DFS(object):
             path[i] = {}
             findOneSourcePath(i, i)
         return path
+
+    @classmethod
+    def choosePath(cls, src_dpid, dst_dpid):
+        if src_dpid in Collector.path:
+            if dst_dpid in Collector.path[src_dpid]:
+                return Collector.path[src_dpid][dst_dpid][0]
