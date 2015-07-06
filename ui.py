@@ -2,6 +2,7 @@ from __future__ import print_function
 
 from collector import Collector
 import sys, select
+# import cmd # crash
 
 def raw_input(message):
     sys.stdout.write(message)
@@ -37,9 +38,9 @@ class Cli(object):
         temp = {}
         print()
         for ip in Collector.arp_table:
-            if Collector.arp_table[ip].datapath.id not in temp:
-                temp[Collector.arp_table[ip].datapath.id] = []
-            temp[Collector.arp_table[ip].datapath.id].append([Collector.arp_table[ip].port,
+            if Collector.arp_table[ip].dpid not in temp:
+                temp[Collector.arp_table[ip].dpid] = []
+            temp[Collector.arp_table[ip].dpid].append([Collector.arp_table[ip].port,
                                                          ip,
                                                          Collector.arp_table[ip].mac_addr])
 
@@ -53,12 +54,19 @@ class Cli(object):
             print(dpid)
             print(Collector.port_info[dpid])
 
+    def print_flow():
+        for dpid in Collector.flow_entry:
+            print(dpid)
+            for cookie in Collector.flow_entry[dpid]:
+                print('     %s' % (Collector.flow_entry[dpid][cookie]))
+
     prompt = 'SNHx> '
     command_dict = {'show port': print_port_info,\
                     'show topo': print_topo,\
                     'show path': print_path,\
                     'show arp': print_arp,\
-                    'show port': print_port}
+                    'show port': print_port,\
+                    'show flow': print_flow}
 
     @classmethod
     def main(cls):
@@ -74,3 +82,29 @@ class Cli(object):
                 cls.command_dict[command]()
             else:
                 print('command not found')
+
+# def print_arp():
+#     temp = {}
+#     print()
+#     for ip in Collector.arp_table:
+#         if Collector.arp_table[ip].datapath.id not in temp:
+#             temp[Collector.arp_table[ip].datapath.id] = []
+#         temp[Collector.arp_table[ip].datapath.id].append([Collector.arp_table[ip].port,
+#                                                      ip,
+#                                                      Collector.arp_table[ip].mac_addr])
+
+
+# class Cli_cmd(cmd.Cmd):
+
+#     use_rawinput = True
+#     prompt = 'SNHx> '
+
+#     def do_show(self, args):
+#         if args == 'arp':
+#             print_arp()
+#         else:
+#             print('Incomplete Command')
+
+#     def do_EOF(self, line):
+#         return True
+

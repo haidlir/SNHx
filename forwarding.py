@@ -16,8 +16,9 @@ from lib import FlowEntry
 class Forwarding(object):
 
     @classmethod
-    def unicast_internal(cls, datapath, inPort, pkt, msg_data, buffer_id):
+    def unicast_internal(cls, datapath, inPort, pkt, msg_data, buffer_id, event):
         pkt_ipv4 = pkt.get_protocol(ipv4.ipv4)
+        # print(event)
 
         # IP tujuan tidak terdeteksi atau tidak ada
         if pkt_ipv4.dst not in Collector.arp_table:
@@ -34,11 +35,11 @@ class Forwarding(object):
                 return
             if len(Collector.path[src_dpid][dst_dpid]) == 0: # Belum ada routing
                 return
-            path = [datapath.id] + DFS.choosePath(src_dpid, dst_dpid)
+            path = [datapath.id] + DFS.getPath(src_dpid, dst_dpid)
         else:
             path = [datapath.id]
 
-        print(path)
+        # print(path)
 
         match_dict = {'in_port': 0,
                       'eth_type': ether.ETH_TYPE_IP,
@@ -71,38 +72,33 @@ class Forwarding(object):
 
         for index in reversed(range(len(path))):
             actions = []
-            print(path[index])
+            # print(index, path[index])
             dp = Collector.datapaths[path[index]]
             if index == len(path)-1:
                 actions.append(dp.ofproto_parser.OFPActionSetField(eth_dst=dst_macAddr))
                 outPort = Collector.arp_table[pkt_ipv4.dst].port
             else:
                 outPort = Collector.topo[path[index]][path[index+1]].outPort
-
-            actions += [dp.ofproto_parser.OFPActionOutput(outPort, 0),
-                        dp.ofproto_parser.OFPActionDecNwTtl()]
             
-            data = None
             if index == 0:
                 match_dict['in_port'] = inPort
-                if buffer_id == datapath.ofproto.OFP_NO_BUFFER:
-                    data = msg_data
-
-                out = dp.ofproto_parser.OFPPacketOut(datapath=dp, buffer_id=buffer_id,
-                                                     in_port=inPort, actions=actions, data=data)
-                dp.send_msg(out)
             else:
                 match_dict['in_port'] = Collector.topo[path[index]][path[index-1]].outPort
 
+            actions += [dp.ofproto_parser.OFPActionOutput(outPort, 0),
+                        dp.ofproto_parser.OFPActionDecNwTtl()]
+ 
             inst = [dp.ofproto_parser.OFPInstructionActions(
                     dp.ofproto.OFPIT_APPLY_ACTIONS, actions)]
 
             match = dp.ofproto_parser.OFPMatch(**match_dict)
 
+
+            table_id = 0
             mod = dp.ofproto_parser.OFPFlowMod(
                     cookie=cookie,
                     cookie_mask=0,
-                    table_id=0,
+                    table_id=table_id,
                     command=dp.ofproto.OFPFC_ADD,
                     datapath=dp,
                     idle_timeout=30,
@@ -116,8 +112,19 @@ class Forwarding(object):
 
             dp.send_msg(mod)
 
+            # data = None
+            # if index == 0:
+            #     if buffer_id == datapath.ofproto.OFP_NO_BUFFER:
+            #         data = msg_data
 
-            Collector.flow_entry[path[index]][cookie] = FlowEntry(match_dict['ipv4_src'],\
+            #     out = datapath.ofproto_parser.OFPPacketOut(datapath=datapath, buffer_id=buffer_id,
+            #                                          in_port=inPort, actions=actions, data=data)
+            #     dp.send_msg(out)
+            #     print('paket out')
+
+            Collector.flow_entry[path[index]][cookie] = FlowEntry(cookie,\
+                                                               table_id,\
+                                                               match_dict['ipv4_src'],\
                                                                match_dict['ipv4_dst'],\
                                                                match_dict['ip_proto'],\
                                                                tp_src,\

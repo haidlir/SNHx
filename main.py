@@ -39,8 +39,10 @@ class Main(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         super(Main, self).__init__(*args, **kwargs)
         print("SNH is running...")
-        self.cli_thread = hub.spawn(self._cli)
-        self.routing_thread = hub.spawn_after(10 ,self._routing)
+        self.thread = {}
+        self.thread['cli_thread'] = hub.spawn(self._cli)
+        self.thread['routing_thread'] = hub.spawn_after(10 , self._routing)
+        self.thread['monitoring_thread'] = hub.spawn_after(10, self._stats_request)
 
     # Event saat switch setup
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
@@ -98,6 +100,7 @@ class Main(app_manager.RyuApp):
     # Event laporan link topo
     @set_ev_cls(event.EventLinkAdd)
     def get_topo(self, event):
+        # print('topo discovery received')
         Collector.topo[event.link.src.dpid][event.link.dst.dpid] = LinkDets(event.link.src.dpid,
                                                                             event.link.src.port_no)
 
@@ -120,6 +123,7 @@ class Main(app_manager.RyuApp):
 
         if etherFrame.ethertype == ether.ETH_TYPE_IP:
             pkt_ipv4 = pkt.get_protocol(ipv4.ipv4)
+            # print('paket ip')
 
             if pkt_ipv4.proto == inet.IPPROTO_UDP:
                 disc_udp = pkt.get_protocol(udp.udp)
@@ -132,21 +136,84 @@ class Main(app_manager.RyuApp):
                         return
 
             # Forward packet
-            Forwarding.unicast_internal(datapath, inPort, pkt, msg.data, msg.buffer_id)
+            print(event)
+            Forwarding.unicast_internal(datapath, inPort, pkt, msg.data, msg.buffer_id, event)
+
+    def _stats_request(self):
+
+        def send_flow_stats_request(datapath):
+            ofp = datapath.ofproto
+            ofp_parser = datapath.ofproto_parser
+
+            # cookie = cookie_mask = 0
+            # match = ofp_parser.OFPMatch(in_port=1)
+            req = ofp_parser.OFPFlowStatsRequest(datapath, 0,
+                                                 ofp.OFPTT_ALL,
+                                                 ofp.OFPP_ANY, ofp.OFPG_ANY,
+                                                 )
+            datapath.send_msg(req)
+
+        while True:
+            for dpid in Collector.datapaths:
+                send_flow_stats_request(Collector.datapaths[dpid])
+            hub.sleep(1)
+
+    @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
+    def flow_stats_reply_handler(self, ev):
+
+        # Get status from a dpiid
+        dpid = ev.msg.datapath.id
+        exist_flow = []
+        temp = {}
+
+        # Get status from every cookie which exists
+        for stat in ev.msg.body:
+            if dpid not in Collector.flow_entry:
+                # print('no dpid')
+                continue
+            if stat.cookie not in Collector.flow_entry[dpid]:
+                # print('no cookie')
+                continue
+
+            # Record flow which exist
+            exist_flow.append(stat.cookie)
+
+            # Update byte.count of Collector.flow_entry
+            Collector.flow_entry[dpid][stat.cookie].update_byte_count(stat.byte_count)
+ 
+            # Update upload of Collector.port_info
+            out_port = Collector.flow_entry[dpid][stat.cookie].out_port
+            bps = Collector.flow_entry[dpid][stat.cookie].bps
+            if out_port not in temp:
+                temp[out_port] = 0
+            temp[out_port] += bps
+
+        for out_port in temp: 
+            Collector.port_info[dpid][out_port].upload = temp[out_port]
+
+        entry = []
+        for cookie_entry in Collector.flow_entry[dpid]:
+            if cookie_entry not in exist_flow:
+                entry.append(cookie_entry)
+
+        for will_delete in entry:
+            Collector.flow_entry[dpid].pop(will_delete, None)
 
     def _cli(self):
         Cli.main()
+        # Cli_cmd().cmdloop()
         # app_mgr = Main.AppManager.get_instance()
         # app_close()
-        self.routing_thread.kill()
-        self.stop()
-        print("stopping")
-        os.kill()
-        # sys.exit()
-        self.cli_thread.kill()
+        # self.routing_thread.kill()
+        # self.stop()
+        # print("stopping")
+        # os.kill()
+        # # sys.exit()
+        # self.cli_thread.kill()
 
     def _routing(self):
+        print('system is ready')
         while True:
             Collector.path = DFS.findAllPairsPath(Collector.topo)
-            print('done')
+            # print('done')
             hub.sleep(5)
