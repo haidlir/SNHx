@@ -88,21 +88,120 @@ class Main(app_manager.RyuApp):
     # Event saat switch closed
     @set_ev_cls(event.EventSwitchLeave)
     def switch_leaved_handler(self, event):
-        switch = event.switch.dp
-        print("ada switch mati dengan id", switch.id)
+        
+        dp = event.switch.dp
+        print("ada switch mati dengan id", dp.id)
 
-    @set_ev_cls(event.EventPortModify)
-    def port_modified_handler(self, event):
-        port = event.port
-        LIVE_MSG = {False: 'DOWN', True: 'LIVE'}
-        print("ada port berubah state di dpid %s port no %s status %s" % (port.dpid,port.port_no,
-                                                                          LIVE_MSG[port.is_live()]))
-    # Event laporan link topo
+        if dp.id in Collector.topo:
+            del Collector.topo[dp.id]
+        for src_dpid in Collector.topo:
+            if dp.id in Collector.topo[src_dpid]:
+                del Collector.topo[src_dpid][dp.id]
+
+        if dp.id in Collector.port_info:
+            del Collector.port_info[dp.id]
+        if dp.id in Collector.path:
+            del Collector.path[dp.id]
+        for src_dpid in Collector.path:
+            if dp.id in Collector.path[src_dpid]:
+                del Collector.path[src_dpid][dp.id]
+            for dst_dpid in Collector.path[src_dpid]:
+                will_delete = []
+                for temp in Collector.path[src_dpid][dst_dpid]:
+                    if dp.id in temp.path:
+                        will_delete.append(temp)
+                Collector.path[src_dpid][dst_dpid] = list(set(Collector.path[src_dpid][dst_dpid]) - set(will_delete))
+
+        if dp.id in Collector.flow_entry:
+            del Collector.flow_entry[dp.id]
+
+    # @set_ev_cls(event.EventPortModify)
+    # def port_modified_handler(self, event):
+    #     port = event.port
+    #     LIVE_MSG = {False: 'DOWN', True: 'LIVE'}
+    #     print("ada port berubah state di dpid %s port no %s status %s" % (port.dpid,port.port_no,
+    #                                                                       LIVE_MSG[port.is_live()]))
+
+    # Event laporan link topo add
     @set_ev_cls(event.EventLinkAdd)
-    def get_topo(self, event):
+    def add_link(self, event):
         # print('topo discovery received')
         Collector.topo[event.link.src.dpid][event.link.dst.dpid] = LinkDets(event.link.src.dpid,
                                                                             event.link.src.port_no)
+
+    # Event laporan link topo delete
+    @set_ev_cls(event.EventLinkDelete)
+    def del_link(self, event):
+        print('link discovery timeout')
+
+    @set_ev_cls(ofp_event.EventOFPPortStatus, MAIN_DISPATCHER)
+    def port_status_handler(self, event):
+        msg = event.msg
+        dp = msg.datapath
+        ofp = dp.ofproto
+
+        if msg.reason == ofp.OFPPR_ADD:
+            reason = 'ADD'
+            print('port [%s] at dpid[%s] reported with reason %s' % (msg.desc.port_no, dp.id, reason))
+            return
+        elif msg.reason == ofp.OFPPR_DELETE:
+            reason = 'DELETE'
+            print('port [%s] at dpid[%s] reported with reason %s' % (msg.desc.port_no, dp.id, reason))
+            return
+        elif msg.reason == ofp.OFPPR_MODIFY:
+            reason = 'MODIFY'
+        else:
+            reason = 'unknown'
+            print('port [%s] at dpid[%s] reported with reason %s' % (msg.desc.port_no, dp.id, reason))
+            return
+
+        # self.logger.debug('OFPPortStatus received: reason=%s desc=%s',
+        #                   reason, msg.desc)
+
+        # print('OFPPortStatus received: reason=%s desc=%s' % (reason, msg.desc))
+
+        # print('port [%s] at dpid[%s] reported with reason %s' % (msg.desc.port_no, dp.id, reason))
+        if msg.desc.port_no not in Collector.port_info[dp.id]:
+            return
+        if msg.desc.state != Collector.port_info[dp.id][msg.desc.port_no].state:
+            Collector.port_info[dp.id][msg.desc.port_no].state = msg.desc.state
+            if msg.desc.state:
+                print('port [%s] at dpid[%s] is Down' % (msg.desc.port_no, dp.id))
+                
+                if dp.id in Collector.topo:
+                    for dpid_next in Collector.topo[dp.id]:
+                        if Collector.topo[dp.id][dpid_next].outPort == msg.desc.port_no:
+                            del Collector.topo[dp.id][dpid_next]
+                            break
+
+                    if 'dpid_next' not in locals():
+                        return
+
+                    for src_dpid in Collector.path:
+                        for dst_dpid in Collector.path[src_dpid]:
+                            will_delete = []
+                            for path_index in range(len(Collector.path[src_dpid][dst_dpid])):
+                                if Collector.path[src_dpid][dst_dpid][path_index].path[0] == dpid_next and src_dpid == dp.id:
+                                    will_delete.append(Collector.path[src_dpid][dst_dpid][path_index])
+                                    continue
+                                for per_node_i in range(len(Collector.path[src_dpid][dst_dpid][path_index].path)-1):
+                                    if Collector.path[src_dpid][dst_dpid][path_index].path[per_node_i] == dp.id and Collector.path[src_dpid][dst_dpid][path_index].path[per_node_i+1] == dpid_next:
+                                        will_delete.append(Collector.path[src_dpid][dst_dpid][path_index])
+                                        break
+                            Collector.path[src_dpid][dst_dpid] = list(set(Collector.path[src_dpid][dst_dpid]) - set(will_delete))
+
+                    for cookie in Collector.flow_entry[dp.id]:
+                        for node_index in range(len(Collector.flow_entry[dp.id][cookie].path)-1):
+                            if Collector.flow_entry[dp.id][cookie].path[node_index] == dp.id and \
+                               Collector.flow_entry[dp.id][cookie].path[node_index + 1] == dpid_next:
+                               req = dp.ofproto_parser.OFPFlowMod(cookie=cookie,
+                                                           command=dp.ofproto.OFPFC_DELETE,
+                                                           datapath=dp,
+                                                           table_id=dp.ofproto.OFPTT_ALL,
+                                                           out_port=dp.ofproto.OFPP_ANY,
+                                                           out_group=dp.ofproto.OFPG_ANY)
+                               Collector.datapaths[Collector.flow_entry[dp.id][cookie].initial_dpid].send_msg(req)
+
 
     # Event ada paket masuk ke Controller
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
@@ -161,7 +260,7 @@ class Main(app_manager.RyuApp):
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def flow_stats_reply_handler(self, ev):
 
-        # Get status from a dpiid
+        # Get status from a dpid
         dpid = ev.msg.datapath.id
         exist_flow = []
         temp = {}
