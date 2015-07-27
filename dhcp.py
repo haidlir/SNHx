@@ -86,7 +86,7 @@ class DHCPServer(object):
                 cls.wan_pool[datapath].remove(wanted_ip)
                 got_ip = wanted_ip
         if got_ip is None:
-            log.warn("%s asked for un-offered %s", src, wanted_ip)
+            # cls.log.warn("%s asked for un-offered %s", src, wanted_ip)
             # cls.nak(event) # nak 
             return
 
@@ -133,7 +133,7 @@ class DHCPServer(object):
             offer = cls.wan_offers[datapath].get(src)
             if offer is None:
                 if len(cls.wan_pool[datapath]) == 0:
-                    cls.logger.error("Out of IP addresses")
+                    # cls.logger.error("Out of IP addresses")
                     # dhcp nak belum dibuat
                     # cls.nak(pkt)
                     return
@@ -185,13 +185,33 @@ class DHCPServer(object):
     @classmethod
     def _handle_dhcp(cls, datapath, port, pkt):
 
-        if datapath not in cls.wan_pool:
-            cls.wan_pool[datapath] = ['192.168.' + str(cls.segment) + '.' + str(x) for x in range(2,254)]
-            cls.dhcp_server[datapath] = '192.168.' + str(cls.segment) + '.1'
-            cls.wan_offers[datapath] = {}
-            cls.wan_leases[datapath] = {}
-            cls.segment += 1
+        def _l3_fabric_dhcp():
+            if datapath not in cls.wan_pool:
+                cls.wan_pool[datapath] = ['192.168.' + str(cls.segment) + '.' + str(x) for x in range(2,254)]
+                cls.dhcp_server[datapath] = '192.168.' + str(cls.segment) + '.1'
+                cls.wan_offers[datapath] = {}
+                cls.wan_leases[datapath] = {}
+                cls.segment += 1
 
+        def _l2_fabric_dhcp():
+            if cls.segment == 0:
+                cls.big_pool = ['10.0.0.' + str(x) for x in range(2,255)]
+                cls.big_pool += ['10.0.1.' + str(x) for x in range(1,254)]
+                cls.netmask = '255.255.254.0'
+                cls.bin_netmask = addrconv.ipv4.text_to_bin(cls.netmask)
+                cls.segment = 1
+            if datapath not in cls.wan_pool:
+                cls.dhcp_server[datapath] = '10.0.0.1'
+                cls.wan_pool[datapath] = cls.big_pool
+                cls.wan_offers[datapath] = {}
+                cls.wan_leases[datapath] = {}
+
+        if Config.service == 'L3_FABRIC' or Config.service == 'WAN':
+            _l3_fabric_dhcp()
+        elif Config.service == 'L2_FABRIC':
+            _l2_fabric_dhcp()
+
+        # print(cls.wan_pool[1][0])
         pkt_dhcp = dhcp.dhcp.parser(pkt[3])
         dhcp_state = cls.get_state(pkt_dhcp)
         # cls.logger.info("NEW DHCP %s PACKET RECEIVED: %s" % (dhcp_state, pkt_dhcp))
