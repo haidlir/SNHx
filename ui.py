@@ -1,5 +1,9 @@
 from __future__ import print_function
 
+from ryu.app.wsgi import ControllerBase, route
+from webob import Response
+import json
+
 from collector import Collector
 import sys, select
 # import cmd # crash
@@ -83,28 +87,25 @@ class Cli(object):
             else:
                 print('command not found')
 
-# def print_arp():
-#     temp = {}
-#     print()
-#     for ip in Collector.arp_table:
-#         if Collector.arp_table[ip].datapath.id not in temp:
-#             temp[Collector.arp_table[ip].datapath.id] = []
-#         temp[Collector.arp_table[ip].datapath.id].append([Collector.arp_table[ip].port,
-#                                                      ip,
-#                                                      Collector.arp_table[ip].mac_addr])
+class RestAPI(ControllerBase):
 
+    @route('RestAPI', '/show-information', methods=['GET'], requirements=None)
+    def get_info(self, req, **kwargs):
+        message = 'SNHx RestAPI is working'
+        return Response(status = 200,
+                        # content_type = 'application/json',
+                        body = message)
 
-# class Cli_cmd(cmd.Cmd):
+    @route('RestAPI', '/show-topo', methods=['GET'], requirements=None)
+    def get_info(self, req, **kwargs):
+        topo = {}
+        for src in Collector.topo:
+            topo[src] = {}
+            for dst in Collector.topo[src]:
+                topo[src][dst] = Collector.topo[src][dst].residual_capacity()
+        message = json.dumps(topo)
+        return Response(status = 200,
+                        content_type = 'application/json',
+                        body = message)
 
-#     use_rawinput = True
-#     prompt = 'SNHx> '
-
-#     def do_show(self, args):
-#         if args == 'arp':
-#             print_arp()
-#         else:
-#             print('Incomplete Command')
-
-#     def do_EOF(self, line):
-#         return True
 

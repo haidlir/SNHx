@@ -10,7 +10,7 @@ class Config(object):
     # L3_Fabric use many IP address subnets (a subnet per-switch/datapath)
     # WAN use static IP addressing
     # So be caution of the underlying network configuration
-    service = 'L2_FABRIC'
+    service = 'L3_FABRIC'
 
     # if you pick WAN as the service
     # you have to configure where a network attached to a port and dpid into

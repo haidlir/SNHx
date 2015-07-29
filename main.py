@@ -2,6 +2,7 @@ from __future__ import print_function
 import sys, signal, os
 import logging
 import thread
+import json
 
 from ryu.base import app_manager
 from ryu.controller import ofp_event
@@ -19,13 +20,15 @@ from ryu.topology import event, switches
 from ryu.topology.api import get_switch, get_link
 from ryu.ofproto import ether
 from ryu.ofproto import inet
+from ryu.app.wsgi import ControllerBase, WSGIApplication, route
+from webob import Response
 
 from collector import Collector
 from routing import DFS
 from forwarding import Forwarding
 from misc import ARP_Handler
 from dhcp import DHCPServer
-from ui import Cli
+from ui import Cli, RestAPI
 from lib import PortDets, LinkDets, curr_to_capacity
 
 # FORMAT = '%(asctime)s %(message)s'
@@ -36,13 +39,21 @@ LOG.setLevel(logging.DEBUG)
 class Main(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
+    _CONTEXTS = {
+        'wsgi': WSGIApplication
+    }
+
     def __init__(self, *args, **kwargs):
         super(Main, self).__init__(*args, **kwargs)
-        print("SNH is running...")
+        print("SNHx is running...")
         self.thread = {}
         self.thread['cli_thread'] = hub.spawn(self._cli)
         self.thread['routing_thread'] = hub.spawn_after(10 , self._routing)
         self.thread['monitoring_thread'] = hub.spawn_after(10, self._stats_request)
+
+        # run wsgi
+        wsgi = kwargs['wsgi']
+        wsgi.register(SNHxAPI, {'SNHxAPI': self})
 
     # Event saat switch setup
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
@@ -316,3 +327,16 @@ class Main(app_manager.RyuApp):
             Collector.path = DFS.findAllPairsPath(Collector.topo)
             # print('done')
             hub.sleep(5)
+
+
+class SNHxAPI(RestAPI):
+    def __init__(self, req, link, data, **config):
+        super(SNHxAPI, self).__init__(req, link, data, **config)
+        self.SNHxAPI_spp = data['SNHxAPI']
+
+    # @route('SNHxAPI', '/show-information', methods=['GET'], requirements=None)
+    # def get_info(self, req, **kwargs):
+    #     message = 'SNHx RestAPI is working'
+    #     return Response(status = 200,
+    #                     # content_type = 'application/json',
+    #                     body = message)

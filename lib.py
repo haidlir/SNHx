@@ -41,7 +41,7 @@ class LinkDets(object):
     def __init__(self, dpid, outPort, capacity=100):
         self.dpid = dpid
         self.outPort = outPort
-        self.capacity = capacity
+        self.capacity = capacity*(10**6)
 
     def get_load(self):
         return Collector.port_info[self.dpid][self.outPort].upload
