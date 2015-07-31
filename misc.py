@@ -11,13 +11,14 @@ from dhcp import DHCPServer
 
 class ARP_Handler(object):
 
+    # Opcode 1 -> Request
+    # Opcode 2 -> Reply
+
     @classmethod
     def receive_arp(cls, datapath, packet, etherFrame, inPort):
-        print('arp paket')
         arpPacket = packet.get_protocol(arp)
 
         if arpPacket.opcode == 1:
-            print('request arp')
             arp_dstIp = arpPacket.dst_ip
             # LOG.debug("receive ARP request %s => %s (port%d)"
                        # %(etherFrame.src, etherFrame.dst, inPort))
@@ -65,4 +66,3 @@ class ARP_Handler(object):
             actions=actions,
             data=p.data)
         datapath.send_msg(out)
-        print('arp sent')

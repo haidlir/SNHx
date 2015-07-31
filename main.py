@@ -246,7 +246,6 @@ class Main(app_manager.RyuApp):
                         return
 
             # Forward packet
-            print(event)
             Forwarding.unicast_internal(datapath, inPort, pkt, msg.data, msg.buffer_id, event)
 
     def _stats_request(self):

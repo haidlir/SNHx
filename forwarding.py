@@ -18,7 +18,6 @@ class Forwarding(object):
     @classmethod
     def unicast_internal(cls, datapath, inPort, pkt, msg_data, buffer_id, event):
         pkt_ipv4 = pkt.get_protocol(ipv4.ipv4)
-        # print(event)
 
         # IP tujuan tidak terdeteksi atau tidak ada
         if pkt_ipv4.dst not in Collector.arp_table:
@@ -38,8 +37,6 @@ class Forwarding(object):
             path = [datapath.id] + DFS.getPath(src_dpid, dst_dpid)
         else:
             path = [datapath.id]
-
-        # print(path)
 
         match_dict = {'in_port': 0,
                       'eth_type': ether.ETH_TYPE_IP,
@@ -109,18 +106,16 @@ class Forwarding(object):
                     out_group=dp.ofproto.OFPG_ANY,
                     match=match,
                     instructions=inst)
-
             dp.send_msg(mod)
 
-            # data = None
-            # if index == 0:
-            #     if buffer_id == datapath.ofproto.OFP_NO_BUFFER:
-            #         data = msg_data
+            data = None
+            if index == 0:
+                if buffer_id == datapath.ofproto.OFP_NO_BUFFER:
+                    data = msg_data
 
-            #     out = datapath.ofproto_parser.OFPPacketOut(datapath=datapath, buffer_id=buffer_id,
-            #                                          in_port=inPort, actions=actions, data=data)
-            #     dp.send_msg(out)
-            #     print('paket out')
+                out = datapath.ofproto_parser.OFPPacketOut(datapath=datapath, buffer_id=buffer_id,
+                                                     in_port=inPort, actions=actions, data=data)
+                dp.send_msg(out)
 
             Collector.flow_entry[path[index]][cookie] = FlowEntry(cookie,\
                                                                table_id,\
