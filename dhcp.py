@@ -206,7 +206,7 @@ class DHCPServer(object):
                 cls.wan_offers[datapath] = {}
                 cls.wan_leases[datapath] = {}
 
-        if Config.service == 'L3_FABRIC' or Config.service == 'WAN':
+        if Config.service == 'L3_FABRIC':
             _l3_fabric_dhcp()
         elif Config.service == 'L2_FABRIC':
             _l2_fabric_dhcp()

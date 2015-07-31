@@ -1,5 +1,7 @@
 from __future__ import print_function
-import sys, signal, os
+import sys
+import signal
+import os
 import logging
 import thread
 import json
@@ -23,9 +25,10 @@ from ryu.ofproto import inet
 from ryu.app.wsgi import ControllerBase, WSGIApplication, route
 from webob import Response
 
+from config import Config
 from collector import Collector
-from routing import DFS
-from forwarding import Forwarding
+from routing import DFS, AllPairsSP
+from forwarding import Forwarding, MPLSSetup
 from misc import ARP_Handler
 from dhcp import DHCPServer
 from ui import Cli, RestAPI
@@ -46,6 +49,12 @@ class Main(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         super(Main, self).__init__(*args, **kwargs)
         print("SNHx is running...")
+
+        # configuration verification error
+        if Config.service == 'L2_FABRIC' and Config.forwarding == 'MPLS':
+            print('Wrong Configuration: L2_FABRIC + MPLS')
+            sys.exit()
+
         self.thread = {}
         self.thread['cli_thread'] = hub.spawn(self._cli)
         self.thread['routing_thread'] = hub.spawn_after(10 , self._routing)
@@ -246,7 +255,8 @@ class Main(app_manager.RyuApp):
                         return
 
             # Forward packet
-            Forwarding.unicast_internal(datapath, inPort, pkt, msg.data, msg.buffer_id, event)
+            if Config.forwarding == 'IP':
+                Forwarding.unicast_internal(datapath, inPort, pkt, msg.data, msg.buffer_id, event)
 
     def _stats_request(self):
 
@@ -323,10 +333,21 @@ class Main(app_manager.RyuApp):
     def _routing(self):
         print('system is ready')
         while True:
-            Collector.path = DFS.findAllPairsPath(Collector.topo)
-            # print('done')
-            hub.sleep(5)
+            if Config.forwarding == 'IP':
+                Collector.path = DFS.findAllPairsPath(Collector.topo)
+                hub.sleep(5)
 
+            elif Config.forwarding == 'MPLS':
+                # create topo
+                topo = {}
+                for src in Collector.topo:
+                    topo[src] = {}
+                    for dst in Collector.topo[src]:
+                        topo[src][dst] = Collector.topo[src][dst].get_cost()
+
+                Collector.path, s_table = AllPairsSP.main(topo)
+                MPLSSetup.main(s_table)
+                hub.sleep(60)
 
 class SNHxAPI(RestAPI):
     def __init__(self, req, link, data, **config):

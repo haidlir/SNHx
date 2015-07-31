@@ -127,3 +127,9 @@ class Forwarding(object):
                                                                match_dict['in_port'],\
                                                                outPort,\
                                                                path)
+
+class MPLSSetup(object):
+
+    @classmethod
+    def main(cls, s_table):
+        pass

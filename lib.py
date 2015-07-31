@@ -48,10 +48,13 @@ class LinkDets(object):
         # return 0
 
     def get_metric(self):
-        return 10**2/(self.capacity-self.get_load())
+        return 10.**8/(self.capacity-self.get_load())
 
     def residual_capacity(self):
         return self.capacity-self.get_load()
+
+    def get_cost(self):
+        return 10.**8/self.capacity
 
     def __repr__(self):
         return "capacity= %s; load = %s; metric = %s" % (self.capacity,
