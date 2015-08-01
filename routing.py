@@ -38,6 +38,12 @@ class DFS(object):
                 temp_path = i.path
         return temp_path
 
+def print_table(result_d):
+    for i in result_d:
+        print('%s :' % i)
+        for j in result_d[i]:
+            print(' %s: %s' % (j, result_d[i][j]))
+
 class AllPairsSP(object):
 
     # All Pairs Shortest Path : Floyd Warshal maybe
@@ -98,22 +104,30 @@ class AllPairsSP(object):
 
     @classmethod
     def s_table_to_path(cls, s_table):
+        # init
         path = {}
+        temp = []
         for i in s_table:
             path[i] = {}
-            for j in s_table[i]:
-                if i == j:
+            temp.append(i)
+
+        for index_i in range(len(temp)):
+            i = temp[index_i]
+            for index_j in range(len(temp)):
+                j = temp[index_j]
+                if index_i <= index_j:
                     continue
                 next_hop = s_table[i][j]
-                path[i][j] = [[s_table[i][j]]]
+                path[i][j] = [[next_hop]]
                 while next_hop != j:
                     next_hop = s_table[next_hop][j]
                     path[i][j][0].append(next_hop)
+                path[j][i] = [path[i][j][0][::-1][1::]+[i]]
 
         return path
 
     @classmethod
     def main(cls, topo):
         result_d, result_s = cls.floyd_warshal_alg(topo)
-        return cls.s_table_to_path(result_s), result_s
+        return cls.s_table_to_path(result_s)
 
