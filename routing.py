@@ -46,88 +46,50 @@ def print_table(result_d):
 
 class AllPairsSP(object):
 
-    # All Pairs Shortest Path : Floyd Warshal maybe
+    # All Pairs Shortest Path : Djisktra iterated
     @classmethod
-    def floyd_warshal_alg(cls, topo):
-        past_d = {}
-        past_s = {}
-        current_d = {}
-        current_s = {}
+    def SingleSrcSP(cls, topo, src): # Single Source Shortest Path
 
-        # init
-        past_d = topo
-        temp = {}
+        unvisited = []
         for vertex in topo:
-            temp[vertex] = vertex
+            if vertex != src:
+                unvisited.append(vertex)
+        path = [[src]]
+        path_cost = {src: 0}
 
-        for vertex in topo:
-            past_s[vertex] = temp
-
-        temp = []
-        for vertex in topo:
-            temp.append(vertex)
-
-        temp_cost = None
-        for k in temp:
-            for i in past_d:
-                if i == k:
-                    current_d[i] = past_d[i].copy()
-                    current_s[i] = past_s[i].copy()
-                    continue
-                current_d[i] = {}
-                current_s[i] = {}
-                for j in temp:
-                    if i == j:
+        for i in range(len(unvisited)):
+            temp_path = None
+            temp_path_cost = None
+            temp_cost = None
+            for i_path in path:
+                for next_vertex in unvisited:
+                    if next_vertex not in topo[i_path[-1]]:
                         continue
-                    if j == k:
-                        if j in past_d[i]:
-                            current_d[i][j] = past_d[i][k]
-                            current_s[i][j] = past_s[i][k]
-                        continue
-                    if (k in past_d[i]) and (j in past_d[k]):
-                        temp_cost = past_d[i][k] + past_d[k][j]
-                        if j not in past_d[i]:
-                            current_d[i][j] = temp_cost
-                            current_s[i][j] = k
-                            continue
-                        elif temp_cost < past_d[i][j]:
-                            current_d[i][j] = temp_cost
-                            current_s[i][j] = k
-                            continue
-                    if j in past_d[i]:
-                        current_d[i][j] = past_d[i][j]
-                        current_s[i][j] = past_s[i][j]
-            past_d = current_d.copy()
-            past_s = current_s.copy()
-
-        return past_d, past_s
+                    temp_cost = path_cost[i_path[-1]] + topo[i_path[-1]][next_vertex]
+                    if (temp_path == None) or temp_path_cost > temp_cost:
+                        temp_path_cost = temp_cost
+                        temp_path = i_path + [next_vertex]
+            if temp_path and temp_path_cost:
+                path.append(temp_path)
+                path_cost[temp_path[-1]] = temp_path_cost
+                unvisited.remove(temp_path[-1])
+        return path, path_cost
 
     @classmethod
-    def s_table_to_path(cls, s_table):
-        # init
+    def AllSrcSP(cls, topo): # Single Source Shortest Path
         path = {}
-        temp = []
-        for i in s_table:
-            path[i] = {}
-            temp.append(i)
-
-        for index_i in range(len(temp)):
-            i = temp[index_i]
-            for index_j in range(len(temp)):
-                j = temp[index_j]
-                if index_i <= index_j:
+        for src in topo:
+            result_path, result_cost = cls.SingleSrcSP(topo, src)
+            path[src] = {}
+            for dst_path in result_path:
+                dst = dst_path[-1]
+                if src == dst:
                     continue
-                next_hop = s_table[i][j]
-                path[i][j] = [[next_hop]]
-                while next_hop != j:
-                    next_hop = s_table[next_hop][j]
-                    path[i][j][0].append(next_hop)
-                path[j][i] = [path[i][j][0][::-1][1::]+[i]]
-
+                path[src][dst] = [dst_path[1::]]
         return path
 
     @classmethod
     def main(cls, topo):
-        result_d, result_s = cls.floyd_warshal_alg(topo)
-        return cls.s_table_to_path(result_s)
+        path = cls.AllSrcSP(topo)
+        return path
 
