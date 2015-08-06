@@ -58,7 +58,7 @@ class LinkDets(object):
 
     def __repr__(self):
         return "capacity= %s; load = %s; metric = %s" % (self.capacity,
-                                                         self.load,
+                                                         self.get_load(),
                                                          self.get_metric())
 
 class OneWayPath(object):

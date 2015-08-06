@@ -11,6 +11,11 @@ class Config(object):
     # The Addressing scheme handled by DHCP Server, static addressing won't work.
     service = 'L3_FABRIC'
 
+    # route
+    # 
+    #
+    route = {}
+
     # forwarding's options = {IP, MPLS}
-    forwarding = 'MPLS'
+    forwarding = 'IP'
 

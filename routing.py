@@ -38,12 +38,6 @@ class DFS(object):
                 temp_path = i.path
         return temp_path
 
-def print_table(result_d):
-    for i in result_d:
-        print('%s :' % i)
-        for j in result_d[i]:
-            print(' %s: %s' % (j, result_d[i][j]))
-
 class AllPairsSP(object):
 
     # All Pairs Shortest Path : Djisktra iterated

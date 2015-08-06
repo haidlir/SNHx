@@ -345,8 +345,14 @@ class Main(app_manager.RyuApp):
                     for dst in Collector.topo[src]:
                         topo[src][dst] = Collector.topo[src][dst].get_cost()
 
-                Collector.path, s_table = AllPairsSP.main(topo)
-                MPLSSetup.main(s_table)
+                Collector.path = AllPairsSP.main(topo)
+
+                path = Collector.path
+                datapaths = Collector.datapaths
+                topo = Collector.topo
+                route = Config.route
+                MPLSSetup.main(path, datapaths, topo, route)
+                
                 hub.sleep(60)
 
 class SNHxAPI(RestAPI):

@@ -189,6 +189,7 @@ class DHCPServer(object):
             if datapath not in cls.wan_pool:
                 cls.wan_pool[datapath] = ['192.168.' + str(cls.segment) + '.' + str(x) for x in range(2,254)]
                 cls.dhcp_server[datapath] = '192.168.' + str(cls.segment) + '.1'
+                Config.route[datapath.id] = '192.168.%s.0/%s' % (cls.segment, cls.netmask)
                 cls.wan_offers[datapath] = {}
                 cls.wan_leases[datapath] = {}
                 cls.segment += 1
