@@ -143,7 +143,6 @@ class MPLSSetup(object):
             for dst in path[src]:
                 if len(path[src][dst]) == 1:
                     complete_path = [src] + path[src][dst][0]
-                    print(complete_path)
                     length = len(complete_path)
                     label = cls.label_mapping[dst]
                     dst_prefix = route[complete_path[-1]]
@@ -176,6 +175,8 @@ class MPLSSetup(object):
             cls.pop_label(datapath, label, outPort)
         elif (i_node > 0) and (i_node < (length-2)):
             cls.forward_label(datapath, label, outPort)
+        # elif i_node == (length-1): # PE
+        #     cls.forward_ip()
 
     @classmethod
     def push_label(cls, dst_prefix, datapath, label, outPort):

@@ -11,11 +11,20 @@ class Config(object):
     # The Addressing scheme handled by DHCP Server, static addressing won't work.
     service = 'L3_FABRIC'
 
+    # forwarding's options = {IP, MPLS}
+    forwarding = 'MPLS'
+
+    # IP Address
+    # It's configured manually by user
+    # example:
+    ip = {1: ['192.168.1.1/24', 1, 1],
+          2: ['192.168.11.1/24', 11, 1]}
+
+    neighbor = {1: ['192.168.1.2'], 
+                2: ['192.168.11.2']}
+
     # route
     # 
     #
     route = {}
-
-    # forwarding's options = {IP, MPLS}
-    forwarding = 'IP'
 

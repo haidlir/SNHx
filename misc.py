@@ -43,6 +43,22 @@ class ARP_Handler(object):
         # LOG.debug("send ARP reply %s => %s (port %d)" %(srcMac, dstMac, inPort))
 
     @classmethod
+    def req_arp(cls, ips, neighs):
+        dstIp = arpPacket.src_ip
+        srcIp = arpPacket.dst_ip
+        dstMac = etherFrame.src
+
+        if arp_dstIp == DHCPServer.dhcp_server[datapath]:
+            srcMac = Config.controller_macAddr
+        elif arp_dstIp in Collector.arp_table:
+            srcMac = Collector.arp_table[arp_dstIp].mac_addr
+        else:
+            return
+
+        cls.send_arp(datapath, 2, srcMac, srcIp, dstMac, dstIp, inPort)
+        # LOG.debug("send ARP reply %s => %s (port %d)" %(srcMac, dstMac, inPort))
+
+    @classmethod
     def send_arp(cls, datapath, opcode, srcMac, srcIp, dstMac, dstIp, outPort):
         if opcode == 1:
             targetMac = "00:00:00:00:00:00"

@@ -5,6 +5,7 @@ import os
 import logging
 import thread
 import json
+import time
 
 from ryu.base import app_manager
 from ryu.controller import ofp_event
@@ -57,8 +58,11 @@ class Main(app_manager.RyuApp):
 
         self.thread = {}
         self.thread['cli_thread'] = hub.spawn(self._cli)
-        self.thread['routing_thread'] = hub.spawn_after(10 , self._routing)
-        self.thread['monitoring_thread'] = hub.spawn_after(10, self._stats_request)
+        self.thread['routing_thread'] = hub.spawn_after(11 , self._routing)
+        self.thread['monitoring_thread'] = hub.spawn_after(11, self._stats_request)
+        if Config.service == 'MPLS':
+            pass
+            # self.thread['arp_req'] = hub.spawn_after(10, self._arp_req)
 
         # run wsgi
         wsgi = kwargs['wsgi']
@@ -96,6 +100,9 @@ class Main(app_manager.RyuApp):
                                 match=parser.OFPMatch(),
                                 instructions=inst)
         dp.send_msg(mod)
+
+        req = parser.OFPSetConfig(dp, ofproto_v1_3.OFPC_FRAG_NORMAL, 1500)
+        dp.send_msg(req)
 
     @set_ev_cls(ofp_event.EventOFPPortDescStatsReply, MAIN_DISPATCHER)
     def port_desc_stats_reply_handler(self, event):
@@ -255,8 +262,8 @@ class Main(app_manager.RyuApp):
                         return
 
             # Forward packet
-            if Config.forwarding == 'IP':
-                Forwarding.unicast_internal(datapath, inPort, pkt, msg.data, msg.buffer_id, event)
+            # if Config.forwarding == 'IP':
+            Forwarding.unicast_internal(datapath, inPort, pkt, msg.data, msg.buffer_id, event)
 
     def _stats_request(self):
 
@@ -338,6 +345,9 @@ class Main(app_manager.RyuApp):
                 hub.sleep(5)
 
             elif Config.forwarding == 'MPLS':
+                # localtime = time.asctime(time.localtime(time.time()))
+                # print(localtime, 'find Paths is started')
+                # start = time.time()
                 # create topo
                 topo = {}
                 for src in Collector.topo:
@@ -352,8 +362,15 @@ class Main(app_manager.RyuApp):
                 topo = Collector.topo
                 route = Config.route
                 MPLSSetup.main(path, datapaths, topo, route)
-                
+                # done = time.time()
+                # print('routing calc: ', done - start)
                 hub.sleep(60)
+
+    def _arp_req(self):
+        while True:
+            ARP_Handler.req_arp(Config.ip, Config.neighbors)
+            hub.sleep(60)
+
 
 class SNHxAPI(RestAPI):
     def __init__(self, req, link, data, **config):
