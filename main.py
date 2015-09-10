@@ -33,7 +33,7 @@ from forwarding import Forwarding, MPLSSetup
 from misc import ARP_Handler
 from dhcp import DHCPServer
 from ui import Cli, RestAPI
-from lib import PortDets, LinkDets, curr_to_capacity
+from lib import PortDets, LinkDets, curr_to_capacity, OneWayPath
 
 # FORMAT = '%(asctime)s %(message)s'
 # logging.basicConfig(format=FORMAT)
@@ -135,8 +135,12 @@ class Main(app_manager.RyuApp):
             for dst_dpid in Collector.path[src_dpid]:
                 will_delete = []
                 for temp in Collector.path[src_dpid][dst_dpid]:
-                    if dp.id in temp.path:
-                        will_delete.append(temp)
+                    if isinstance(temp, OneWayPath):
+                        if dp.id in temp.path:
+                            will_delete.append(temp)
+                    else:
+                        if dp.id in temp:
+                            will_delete.append(temp)
                 Collector.path[src_dpid][dst_dpid] = list(set(Collector.path[src_dpid][dst_dpid]) - set(will_delete))
 
         if dp.id in Collector.flow_entry:
@@ -253,6 +257,9 @@ class Main(app_manager.RyuApp):
 
             if pkt_ipv4.proto == inet.IPPROTO_UDP:
                 disc_udp = pkt.get_protocol(udp.udp)
+                if not disc_udp:
+                    # print(disc_udp)
+                    return
                 if disc_udp.src_port == 68 and disc_udp.dst_port == 67:
                     pkt_dhcp = dhcp.dhcp.parser(pkt[3])
                     if not pkt_dhcp:

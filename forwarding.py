@@ -145,7 +145,7 @@ class MPLSSetup(object):
                     complete_path = [src] + path[src][dst][0]
                     length = len(complete_path)
                     label = cls.label_mapping[dst]
-                    dst_prefix = route[complete_path[-1]]
+                    dst_prefix = route[complete_path[-1]] # -> dhcp should be set up first
                     for i_node in range(length):
                         if i_node == length-1:
                             continue
@@ -169,8 +169,12 @@ class MPLSSetup(object):
     @classmethod
     def setup_flow_entry(cls, dst_prefix, label, i_node, datapath, outPort, 
                          length):
+
         if i_node == 0:
-            cls.push_label(dst_prefix, datapath, label, outPort)
+            if length == 2:
+                cls.push_label(dst_prefix, datapath, None, outPort)
+            else:
+                cls.push_label(dst_prefix, datapath, label, outPort)
         elif i_node == (length-2): # PHP
             cls.pop_label(datapath, label, outPort)
         elif (i_node > 0) and (i_node < (length-2)):
@@ -186,12 +190,15 @@ class MPLSSetup(object):
         match = datapath.ofproto_parser.OFPMatch(
                 eth_type=ether.ETH_TYPE_IP,
                 ipv4_dst=(dstIp, dstMask))
-        actions =[datapath.ofproto_parser.OFPActionPushMpls(0x8847),
-                datapath.ofproto_parser.OFPActionSetField(mpls_label=label),
-                datapath.ofproto_parser.OFPActionSetField(mpls_tc=1),
-                datapath.ofproto_parser.OFPActionOutput(outPort, 0),
-                datapath.ofproto_parser.OFPActionSetMplsTtl(255),
-                datapath.ofproto_parser.OFPActionDecMplsTtl()]
+        if label:
+            actions = [datapath.ofproto_parser.OFPActionPushMpls(0x8847),
+                    datapath.ofproto_parser.OFPActionSetField(mpls_label=label),
+                    datapath.ofproto_parser.OFPActionSetField(mpls_tc=1),
+                    datapath.ofproto_parser.OFPActionOutput(outPort, 0),
+                    datapath.ofproto_parser.OFPActionSetMplsTtl(255),
+                    datapath.ofproto_parser.OFPActionDecMplsTtl()]
+        else:
+            actions = [datapath.ofproto_parser.OFPActionOutput(outPort, 0)]
         inst = [datapath.ofproto_parser.OFPInstructionActions(
                 datapath.ofproto.OFPIT_APPLY_ACTIONS, actions)]
         mod = datapath.ofproto_parser.OFPFlowMod(

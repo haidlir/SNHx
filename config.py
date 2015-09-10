@@ -12,7 +12,7 @@ class Config(object):
     service = 'L3_FABRIC'
 
     # forwarding's options = {IP, MPLS}
-    forwarding = 'MPLS'
+    forwarding = 'IP'
 
     # IP Address
     # It's configured manually by user
