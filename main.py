@@ -60,6 +60,7 @@ class Main(app_manager.RyuApp):
         self.thread['cli_thread'] = hub.spawn(self._cli)
         self.thread['routing_thread'] = hub.spawn_after(11 , self._routing)
         self.thread['monitoring_thread'] = hub.spawn_after(11, self._stats_request)
+        # self.thread['get_data'] = hub.spawn_after(11, self._get_data)
         if Config.service == 'MPLS':
             pass
             # self.thread['arp_req'] = hub.spawn_after(10, self._arp_req)
@@ -270,7 +271,7 @@ class Main(app_manager.RyuApp):
 
             # Forward packet
             # if Config.forwarding == 'IP':
-            Forwarding.unicast_internal(datapath, inPort, pkt, msg.data, msg.buffer_id, event)
+            Forwarding.unicast_internal(datapath, inPort, pkt, msg.data, msg.buffer_id, event, self.CONF)
 
     def _stats_request(self):
 
@@ -354,7 +355,7 @@ class Main(app_manager.RyuApp):
             elif Config.forwarding == 'MPLS':
                 # localtime = time.asctime(time.localtime(time.time()))
                 # print(localtime, 'find Paths is started')
-                # start = time.time()
+                start = time.time()
                 # create topo
                 topo = {}
                 for src in Collector.topo:
@@ -369,14 +370,23 @@ class Main(app_manager.RyuApp):
                 topo = Collector.topo
                 route = Config.route
                 MPLSSetup.main(path, datapaths, topo, route)
-                # done = time.time()
-                # print('routing calc: ', done - start)
+                done = time.time()
+                print('routing calc: ', done - start)
                 hub.sleep(60)
 
     def _arp_req(self):
         while True:
             ARP_Handler.req_arp(Config.ip, Config.neighbors)
             hub.sleep(60)
+
+    def _get_data(self):
+        from ui import print_flow
+        s = 11
+        while True:
+            print_flow(s)
+            s += 1
+            hub.sleep(1)
+
 
 
 class SNHxAPI(RestAPI):

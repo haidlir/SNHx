@@ -1,11 +1,14 @@
 from __future__ import print_function
 from random import randint
+import time
 
+from ryu.lib.ovs import bridge
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.packet import ipv4
 from ryu.lib.packet import tcp
 from ryu.lib.packet import udp
+import ryu.lib.dpid as dpid_lib
 from ryu.ofproto import ether
 from ryu.ofproto import inet
 from netaddr.ip import IPNetwork
@@ -14,10 +17,36 @@ from collector import Collector
 from routing import DFS
 from lib import FlowEntry
 
+
+def create_queue_list(dpid, outPort, max_capacity, new_queue_id):
+    same_outPort = 1
+    cookie_list = []
+    for entry in Collector.flow_entry[dpid]:
+        entry = Collector.flow_entry[dpid][entry]
+        if entry.out_port == outPort:
+            same_outPort += 1
+            cookie_list.append(entry.cookie)
+
+    max_rate = int(max_capacity / same_outPort)
+
+    config = {}
+    config['id'] = str(new_queue_id)
+    config['max-rate'] = str(max_rate)
+    queue_config = [config]
+    for cookie in cookie_list:
+        config = {}
+        config['id'] = str(cookie)
+        config['max-rate'] = str(max_rate)
+        queue_config.append(config)   
+
+    return queue_config
+
+
 class Forwarding(object):
 
     @classmethod
-    def unicast_internal(cls, datapath, inPort, pkt, msg_data, buffer_id, event):
+    def unicast_internal(cls, datapath, inPort, pkt, msg_data, buffer_id, event, CONF):
+        # start = time.time()
         pkt_ipv4 = pkt.get_protocol(ipv4.ipv4)
 
         # IP tujuan tidak terdeteksi atau tidak ada
@@ -58,7 +87,11 @@ class Forwarding(object):
 
         used = False
         while(not used):
-            cookie = randint(0,2**64-1) # ukuran cookie itu 64 bit, dengan all 1s is reserved
+             # ukuran cookie itu 64 bit, dengan all 1s is reserved
+             # pake 32 bit, supaya cookie bisa dipakai di meter_id
+            cookie = randint(0,2**32-1)
+            # meter_id = cookie
+            queue_id = cookie
             for dpid_cek in Collector.flow_entry:
                 if cookie in Collector.flow_entry[dpid_cek]:
                     used = False
@@ -67,6 +100,32 @@ class Forwarding(object):
                     used = True
             if used:
                 break
+
+        # metering
+        # rate = 1000000 # decied later
+        # burst_size = 0 # decided later
+
+        #queue
+        # if pkt_ipv4.dst == '192.168.9.2':
+        #     try:
+        #         print(cls.max_rate)
+        #         max_rate = str(int(cls.max_rate)+1000000)
+        #         print('here')
+        #     except:
+        #         max_rate = '4000000' # decided later
+        #     cls.max_rate = max_rate
+        # else:
+        #     max_rate = '1000000'
+        queue_type = 'linux-htb'
+        # queue_config = []
+
+        # config = {}
+        # config['id'] = str(queue_id)
+        # config['max-rate'] = max_rate
+
+        # queue_config.append(config)
+
+        ovsdb_addr = 'tcp:192.168.56.101:6632' # will be referenced later
 
         for index in reversed(range(len(path))):
             actions = []
@@ -80,24 +139,49 @@ class Forwarding(object):
             
             if index == 0:
                 match_dict['in_port'] = inPort
+                # metering configuration is disabled.
+                # OVS support metering feature in Openflow protocol, But there is no
+                # metering implementation yet in OVS.
+                # bands = []
+                # bands.append(dp.ofproto_parser.OFPMeterBandDrop(rate, burst_size))
+                # meter_mod = dp.ofproto_parser.OFPMeterMod(dp,
+                #                                           command=dp.ofproto.OFPMC_ADD,
+                #                                           flags=dp.ofproto.OFPMF_KBPS,
+                #                                           meter_id=1,
+                #                                           bands=bands)
+                # dp.send_msg(meter_mod) ------------------
+
+                # Queue
+                parent_max_rate = Collector.port_info[dp.id][outPort].capacity * 10**6
+                queue_config = create_queue_list(dp.id, outPort, parent_max_rate, queue_id)
+                port_name = str('s%s-eth%s' % (dp.id, outPort))
+                ovs_bridge = bridge.OVSBridge(CONF, dp.id, ovsdb_addr)
+                ovs_bridge.init()
+                ovs_bridge.set_qos(port_name, type=queue_type,
+                                        max_rate=str(int(parent_max_rate)),
+                                        queues=queue_config)
+
+                actions.append(dp.ofproto_parser.OFPActionSetQueue(queue_id=queue_id))
             else:
                 match_dict['in_port'] = Collector.topo[path[index]][path[index-1]].outPort
 
             actions += [dp.ofproto_parser.OFPActionOutput(outPort, 0),
                         dp.ofproto_parser.OFPActionDecNwTtl()]
  
-            inst = [dp.ofproto_parser.OFPInstructionActions(
-                    dp.ofproto.OFPIT_APPLY_ACTIONS, actions)]
+            inst = [dp.ofproto_parser.OFPInstructionActions(dp.ofproto.OFPIT_APPLY_ACTIONS, actions)]
+
+            # dimatikan dulu
+            # if index == 0:
+            #     inst.append(dp.ofproto_parser.OFPInstructionMeter(meter_id))
 
             match = dp.ofproto_parser.OFPMatch(**match_dict)
-
 
             table_id = 0
             mod = dp.ofproto_parser.OFPFlowMod(
                     cookie=cookie,
                     cookie_mask=0,
                     table_id=table_id,
-                    command=dp.ofproto.OFPFC_ADD,
+                    # command=dp.ofproto.OFPFC_ADD,
                     datapath=dp,
                     idle_timeout=30,
                     hard_timeout=60,
@@ -128,6 +212,8 @@ class Forwarding(object):
                                                                match_dict['in_port'],\
                                                                outPort,\
                                                                path)
+        # done = time.time()
+        # print('set rule calc: ', done - start)
 
 
 class MPLSSetup(object):
@@ -195,7 +281,6 @@ class MPLSSetup(object):
                     datapath.ofproto_parser.OFPActionSetField(mpls_label=label),
                     datapath.ofproto_parser.OFPActionSetField(mpls_tc=1),
                     datapath.ofproto_parser.OFPActionOutput(outPort, 0),
-                    datapath.ofproto_parser.OFPActionSetMplsTtl(255),
                     datapath.ofproto_parser.OFPActionDecMplsTtl()]
         else:
             actions = [datapath.ofproto_parser.OFPActionOutput(outPort, 0)]

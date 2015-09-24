@@ -11,8 +11,8 @@ def curr_to_capacity(curr):
       32  : 1000.,
       64  : 10000.
     }
-    return capacity[127 & curr]
-    # return 100. # for TC in mininet
+    # return capacity[127 & curr]
+    return 100. # for TC in mininet
 
 class ARPDets(object):
     def __init__(self, dpid, port, mac_addr):
@@ -44,8 +44,8 @@ class LinkDets(object):
         self.capacity = capacity*(10**6)
 
     def get_load(self):
-        return Collector.port_info[self.dpid][self.outPort].upload
-        # return 0
+        # return Collector.port_info[self.dpid][self.outPort].upload
+        return 0
 
     def get_metric(self):
         return 10.**8/(self.capacity-self.get_load())

@@ -14,6 +14,14 @@ def raw_input(message):
     select.select([sys.stdin], [], [])
     return sys.stdin.readline()
 
+def print_flow(s):
+    print('detik ke %s' % (s))
+    for dpid in Collector.flow_entry:
+        print(dpid)
+        for cookie in Collector.flow_entry[dpid]:
+            print('     %s' % (Collector.flow_entry[dpid][cookie]))
+    print('-------------------------------------------------')
+
 class Cli(object):
 
     def __init__(self, *args, **kwargs):
@@ -57,6 +65,7 @@ class Cli(object):
         for dpid in Collector.port_info:
             print(dpid)
             print(Collector.port_info[dpid])
+
 
     def print_flow():
         for dpid in Collector.flow_entry:
