@@ -18,28 +18,128 @@ from routing import DFS
 from lib import FlowEntry
 
 
-def create_queue_list(dpid, outPort, max_capacity, new_queue_id):
-    same_outPort = 1
-    cookie_list = []
-    for entry in Collector.flow_entry[dpid]:
-        entry = Collector.flow_entry[dpid][entry]
-        if entry.out_port == outPort:
-            same_outPort += 1
-            cookie_list.append(entry.cookie)
+# def create_queue_list(dpid, outPort, max_capacity, new_queue_id):
+#     same_outPort = 1
+#     cookie_list = []
+#     for entry in Collector.flow_entry[dpid]:
+#         entry = Collector.flow_entry[dpid][entry]
+#         if entry.out_port == outPort:
+#             same_outPort += 1
+#             cookie_list.append(entry.cookie)
 
-    max_rate = int(max_capacity / same_outPort)
+#     max_rate = int(max_capacity / same_outPort)
 
-    config = {}
-    config['id'] = str(new_queue_id)
-    config['max-rate'] = str(max_rate)
-    queue_config = [config]
-    for cookie in cookie_list:
-        config = {}
-        config['id'] = str(cookie)
-        config['max-rate'] = str(max_rate)
-        queue_config.append(config)   
+#     config = {}
+#     config['id'] = str(new_queue_id)
+#     config['max-rate'] = str(max_rate)
+#     queue_config = [config]
+#     for cookie in cookie_list:
+#         config = {}
+#         config['id'] = str(cookie)
+#         config['max-rate'] = str(max_rate)
+#         queue_config.append(config)   
 
-    return queue_config
+#     return queue_config
+
+def get_flow_after_conf(main_flow_entry, path, inPort, match_dict):
+    for index in reversed(range(len(path))):
+        dp = Collector.datapaths[path[index]]
+        if index == len(path)-1:
+            outPort = Collector.arp_table[pkt_ipv4.dst].port
+        else:
+            outPort = Collector.topo[path[index]][path[index+1]].outPort
+        if index == 0:
+            match_dict['in_port'] = inPort
+        else:
+            match_dict['in_port'] = Collector.topo[path[index]][path[index-1]].outPort
+        table_id = 0
+        main_flow_entry[path[index]][cookie] = FlowEntry(cookie,\
+                                                           table_id,\
+                                                           match_dict['ipv4_src'],\
+                                                           match_dict['ipv4_dst'],\
+                                                           match_dict['ip_proto'],\
+                                                           tp_src,\
+                                                           tp_dst,\
+                                                           match_dict['in_port'],\
+                                                           outPort,\
+                                                           path)
+    return main_flow_entry
+
+def per_port_classification(flow_entry):
+    # classify flow based on output_port and dpid
+    active_flow = {}
+    for dpid in flow_entry:
+        active_flow[dpid] = {}
+        for entry_id in flow_entry[dpid]:
+            entry = flow_entry[dpid][entry_id]
+            out_port = entry.out_port
+            if out_port not in active_flow[dpid]:
+                active_flow[dpid][out_port] = [entry]
+            else:
+                active_flow[dpid][out_port].append(entry)
+    return  active_flow
+
+def sort_flow(active_flow, port_info):
+    sorted_flow = []
+    for dpid in active_flow:
+        for out_port in active_flow[dpid]:
+            entry_list = active_flow[dpid][out_port]:
+            entry_list_len = len(entry_list)
+            capacity = port_info[dpid][out_port]
+            max_rate = capacity * 10**6 / entry_list_len
+            detail = {
+                'dpid' : dpid
+                'out_port' : out_port
+                'number_of_flow' : entry_list_len
+                'max_rate' : max_rate
+            }
+            if len(sorted_flow) == 0:
+                sorted_flow.append(detail)
+            else:
+                for index in len(sorted_flow):
+                    index_rate = sorted_flow[index]['max_rate']
+                    if max_rate < index_rate:
+                        sorted_flow.insert(index, detail)
+                        break
+                    elif index == len(sorted_flow)-1:
+                        sorted_flow.append(detail)
+    return sorted_flow
+
+def create_queue_list(sorted_flow, active_flow, main_flow_entry):
+    queue_conf_dict
+    affected_cookie = []
+    for flow_conf in sort_flow:
+        max_rate = flow_conf['max_rate']
+        dpid = flow_conf['dpid']
+        out_port = flow_conf['out_port']
+        flow_entry_list = active_flow[dpid][out_port]
+        for entry in flow_entry_list:
+            cookie = entry.cookie
+            if cookie in affected_cookie:
+                continue
+            init_dpid = entry.path[0]
+            init_dpid_out_port = main_flow_entry[init_dpid][cookie].out_port
+            if init_dpid not in queue_conf_dict:
+                queue_conf_dict[init_dpid] = {}
+            if init_dpid_out_port not in queue_conf_dict[init_dpid]:
+                queue_conf_dict[init_dpid][init_dpid_out_port] = []
+            config = {}
+            config['id'] = str(cookie)
+            config['max-rate'] = str(max_rate)
+            queue_conf_dict[init_dpid][init_dpid_out_port].append(config)
+            affected_cookie.append(cookie)
+    return queue_conf_dict
+
+def create_queue_conf(main_flow_entry, path, inPort, match_dict):
+    # forecast
+    main_flow_entry = get_flow_after_conf(main_flow_entry, path, inPort, match_dict)
+    # classify flow based on output_port and dpid
+    active_flow = per_port_classification(main_flow_entry)
+    # sort the active flow from the smallest max_rate
+    sorted_flow_info = sort_flow(active_flow, Collector.port_info)
+    # create queue config list
+    queue_conf_dict = create_queue_list(sorted_flow, active_flow, main_flow_entry)
+    
 
 
 class Forwarding(object):
@@ -105,27 +205,21 @@ class Forwarding(object):
         # rate = 1000000 # decied later
         # burst_size = 0 # decided later
 
-        #queue
-        # if pkt_ipv4.dst == '192.168.9.2':
-        #     try:
-        #         print(cls.max_rate)
-        #         max_rate = str(int(cls.max_rate)+1000000)
-        #         print('here')
-        #     except:
-        #         max_rate = '4000000' # decided later
-        #     cls.max_rate = max_rate
-        # else:
-        #     max_rate = '1000000'
+        #queuing
         queue_type = 'linux-htb'
-        # queue_config = []
-
-        # config = {}
-        # config['id'] = str(queue_id)
-        # config['max-rate'] = max_rate
-
-        # queue_config.append(config)
-
         ovsdb_addr = 'tcp:192.168.56.101:6632' # will be referenced later
+        queue_conf_dict = create_queue_conf(main_flow_entry, path, inPort, match_dict)
+
+        for init_dpid in queue_conf_dict:
+            for init_out_port in queue_conf_dict[init_dpid]:
+                parent_max_rate = Collector.port_info[init_dpid][init_out_port].capacity * 10**6
+                queue_config = queue_conf_dict[init_dpid][init_out_port]
+                port_name = str('s%s-eth%s' % (init_dpid, init_out_port))
+                ovs_bridge = bridge.OVSBridge(CONF, init_dpid, ovsdb_addr)
+                ovs_bridge.init()
+                ovs_bridge.set_qos(port_name, type=queue_type,
+                                        max_rate=str(int(parent_max_rate)),
+                                        queues=queue_config)
 
         for index in reversed(range(len(path))):
             actions = []
@@ -152,15 +246,14 @@ class Forwarding(object):
                 # dp.send_msg(meter_mod) ------------------
 
                 # Queue
-                parent_max_rate = Collector.port_info[dp.id][outPort].capacity * 10**6
-                queue_config = create_queue_list(dp.id, outPort, parent_max_rate, queue_id)
-                port_name = str('s%s-eth%s' % (dp.id, outPort))
-                ovs_bridge = bridge.OVSBridge(CONF, dp.id, ovsdb_addr)
-                ovs_bridge.init()
-                ovs_bridge.set_qos(port_name, type=queue_type,
-                                        max_rate=str(int(parent_max_rate)),
-                                        queues=queue_config)
-
+                # parent_max_rate = Collector.port_info[dp.id][outPort].capacity * 10**6
+                # queue_config = create_queue_list(dp.id, outPort, parent_max_rate, queue_id)
+                # port_name = str('s%s-eth%s' % (dp.id, outPort))
+                # ovs_bridge = bridge.OVSBridge(CONF, dp.id, ovsdb_addr)
+                # ovs_bridge.init()
+                # ovs_bridge.set_qos(port_name, type=queue_type,
+                #                         max_rate=str(int(parent_max_rate)),
+                #                         queues=queue_config)
                 actions.append(dp.ofproto_parser.OFPActionSetQueue(queue_id=queue_id))
             else:
                 match_dict['in_port'] = Collector.topo[path[index]][path[index-1]].outPort
