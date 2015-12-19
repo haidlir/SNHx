@@ -83,6 +83,10 @@ class AllPairsSP(object):
         return path
 
     @classmethod
+    def getPath(cls, src_dpid, dst_dpid):
+        if Collector.path[src_dpid][dst_dpid]:
+            return Collector.path[src_dpid][dst_dpid][0]
+    @classmethod
     def main(cls, topo):
         path = cls.AllSrcSP(topo)
         return path

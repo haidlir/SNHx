@@ -14,6 +14,9 @@ class Config(object):
     # forwarding's options = {IP, MPLS}
     forwarding = 'IP'
 
+    # L4 lookup
+    l4_lookup = False
+
     # IP Address
     # It's configured manually by user
     # example:

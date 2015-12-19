@@ -348,7 +348,14 @@ class Main(app_manager.RyuApp):
         print('system is ready')
         while True:
             if Config.forwarding == 'IP':
-                Collector.path = DFS.findAllPairsPath(Collector.topo)
+                # Collector.path = DFS.findAllPairsPath(Collector.topo)
+                topo = {}
+                for src in Collector.topo:
+                    topo[src] = {}
+                    for dst in Collector.topo[src]:
+                        topo[src][dst] = Collector.topo[src][dst].get_cost()
+
+                Collector.path = AllPairsSP.main(topo)
                 hub.sleep(5)
 
             elif Config.forwarding == 'MPLS':
