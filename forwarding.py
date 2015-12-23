@@ -11,7 +11,8 @@ from ryu.ofproto import inet
 from netaddr.ip import IPNetwork
 
 from collector import Collector
-from routing import DFS
+from config import Config
+from routing import DFS, AllPairsSP
 from lib import FlowEntry
 
 class Forwarding(object):
@@ -35,26 +36,28 @@ class Forwarding(object):
                 return
             if len(Collector.path[src_dpid][dst_dpid]) == 0: # Belum ada routing
                 return
-            path = [datapath.id] + DFS.getPath(src_dpid, dst_dpid)
+            # path = [datapath.id] + DFS.getPath(src_dpid, dst_dpid)
+            path = [datapath.id] + AllPairsSP.getPath(src_dpid, dst_dpid)
         else:
             path = [datapath.id]
 
         match_dict = {'in_port': 0,
                       'eth_type': ether.ETH_TYPE_IP,
                       'ipv4_src': pkt_ipv4.src,
-                      'ipv4_dst': pkt_ipv4.dst,
-                      'ip_proto': pkt_ipv4.proto}
+                      'ipv4_dst': pkt_ipv4.dst}
 
-        tp_src = tp_dst = 0
+        if Config.l4_lookup:
+            match_dict['ip_proto'] = pkt_ipv4.proto
+            tp_src = tp_dst = 0
 
-        if pkt_ipv4.proto == inet.IPPROTO_TCP:
-            pkt_tcp = pkt.get_protocol(tcp.tcp)
-            tp_src = match_dict['tcp_src'] = pkt_tcp.src_port
-            tp_dst = match_dict['tcp_dst'] = pkt_tcp.dst_port
-        elif pkt_ipv4.proto == inet.IPPROTO_UDP:
-            pkt_udp = pkt.get_protocol(udp.udp)
-            tp_src = match_dict['udp_src'] = pkt_udp.src_port
-            tp_dst = match_dict['udp_dst'] = pkt_udp.dst_port
+            if pkt_ipv4.proto == inet.IPPROTO_TCP:
+                pkt_tcp = pkt.get_protocol(tcp.tcp)
+                tp_src = match_dict['tcp_src'] = pkt_tcp.src_port
+                tp_dst = match_dict['tcp_dst'] = pkt_tcp.dst_port
+            elif pkt_ipv4.proto == inet.IPPROTO_UDP:
+                pkt_udp = pkt.get_protocol(udp.udp)
+                tp_src = match_dict['udp_src'] = pkt_udp.src_port
+                tp_dst = match_dict['udp_dst'] = pkt_udp.dst_port
 
         used = False
         while(not used):
@@ -118,16 +121,28 @@ class Forwarding(object):
                                                      in_port=inPort, actions=actions, data=data)
                 dp.send_msg(out)
 
-            Collector.flow_entry[path[index]][cookie] = FlowEntry(cookie,\
-                                                               table_id,\
-                                                               match_dict['ipv4_src'],\
-                                                               match_dict['ipv4_dst'],\
-                                                               match_dict['ip_proto'],\
-                                                               tp_src,\
-                                                               tp_dst,\
-                                                               match_dict['in_port'],\
-                                                               outPort,\
-                                                               path)
+            if not Config.l4_lookup:
+                Collector.flow_entry[path[index]][cookie] = FlowEntry(cookie,\
+                                                   table_id,\
+                                                   match_dict['ipv4_src'],\
+                                                   match_dict['ipv4_dst'],\
+                                                   'unused',\
+                                                   0,\
+                                                   0,\
+                                                   match_dict['in_port'],\
+                                                   outPort,\
+                                                   path)
+            else:
+                Collector.flow_entry[path[index]][cookie] = FlowEntry(cookie,\
+                                                                   table_id,\
+                                                                   match_dict['ipv4_src'],\
+                                                                   match_dict['ipv4_dst'],\
+                                                                   match_dict['ip_proto'],\
+                                                                   tp_src,\
+                                                                   tp_dst,\
+                                                                   match_dict['in_port'],\
+                                                                   outPort,\
+                                                                   path)
 
 
 class MPLSSetup(object):
