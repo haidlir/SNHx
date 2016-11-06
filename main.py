@@ -265,7 +265,10 @@ class Main(app_manager.RyuApp):
                     if not pkt_dhcp:
                         return
                     else:
+                        # try:
                         DHCPServer._handle_dhcp(datapath, inPort, pkt)
+                        # except:
+                            # pass
                         return
 
             # Forward packet

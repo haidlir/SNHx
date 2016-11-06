@@ -63,7 +63,7 @@ class DHCPServer(object):
         req_eth = pkt.get_protocol(ethernet.ethernet)
         req_ipv4 = pkt.get_protocol(ipv4.ipv4)
         req_udp = pkt.get_protocol(udp.udp)
-        req = dhcp.dhcp.parser(pkt[3])
+        req = [dhcp.dhcp.parser(pkt[3])[2]]
 
         wanted_ip = cls.get_option_value(req[0], 50)
         src = req_eth.src
@@ -122,7 +122,7 @@ class DHCPServer(object):
         disc_eth = pkt.get_protocol(ethernet.ethernet)
         disc_ipv4 = pkt.get_protocol(ipv4.ipv4)
         disc_udp = pkt.get_protocol(udp.udp)
-        disc = dhcp.dhcp.parser(pkt[3])
+        disc = [dhcp.dhcp.parser(pkt[3])[2]]
 
         src = disc_eth.src 
         if src in cls.wan_leases[datapath]:
@@ -171,7 +171,8 @@ class DHCPServer(object):
 
     @classmethod
     def get_state(cls, pkt_dhcp):
-        dhcp_state = ord([opt for opt in pkt_dhcp[0].options.option_list if opt.tag == 53][0].value)
+	# print(type(pkt_dhcp[2].options.option_list))
+        dhcp_state = ord([opt for opt in pkt_dhcp[2].options.option_list if opt.tag == 53][0].value)
         if dhcp_state == 1:
             state = 'DHCPDISCOVER'
         elif dhcp_state == 2:
