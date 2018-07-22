@@ -63,9 +63,9 @@ class DHCPServer(object):
         req_eth = pkt.get_protocol(ethernet.ethernet)
         req_ipv4 = pkt.get_protocol(ipv4.ipv4)
         req_udp = pkt.get_protocol(udp.udp)
-        req = [dhcp.dhcp.parser(pkt[3])[2]]
+        req = pkt.get_protocol(dhcp.dhcp)
 
-        wanted_ip = cls.get_option_value(req[0], 50)
+        wanted_ip = cls.get_option_value(req, 50)
         src = req_eth.src
         got_ip = None
         if src in cls.wan_leases[datapath]:
@@ -90,14 +90,13 @@ class DHCPServer(object):
             # cls.nak(event) # nak 
             return
 
-        req[0].options.option_list.remove(next(opt for opt in req[0].options.option_list if opt.tag == 53))
-        req[0].options.option_list.insert(0, dhcp.option(tag=1, value=cls.bin_netmask))
-        req[0].options.option_list.insert(0, dhcp.option(tag=3, value=addrconv.ipv4.text_to_bin(cls.dhcp_server[datapath])))
-        req[0].options.option_list.insert(0, dhcp.option(tag=6, value=cls.bin_dns))
-        # req[0].options.option_list.insert(0, dhcp.option(tag=12, value=cls.hostname))
-        req[0].options.option_list.insert(0, dhcp.option(tag=51, value='8640'))        
-        req[0].options.option_list.insert(0, dhcp.option(tag=53, value='05'.decode('hex')))
-        req[0].options.option_list.insert(0, dhcp.option(tag=54, value=addrconv.ipv4.text_to_bin(cls.dhcp_server[datapath])))
+        req.options.option_list.remove(next(opt for opt in req.options.option_list if opt.tag == 53))
+        req.options.option_list.insert(0, dhcp.option(tag=1, value=cls.bin_netmask))
+        req.options.option_list.insert(0, dhcp.option(tag=3, value=addrconv.ipv4.text_to_bin(cls.dhcp_server[datapath])))
+        req.options.option_list.insert(0, dhcp.option(tag=6, value=cls.bin_dns))
+        req.options.option_list.insert(0, dhcp.option(tag=51, value='8640'))
+        req.options.option_list.insert(0, dhcp.option(tag=53, value='05'.decode('hex')))
+        req.options.option_list.insert(0, dhcp.option(tag=54, value=addrconv.ipv4.text_to_bin(cls.dhcp_server[datapath])))
 
         ack_pkt = packet.Packet()
         ack_pkt.add_protocol(ethernet.ethernet(ethertype=req_eth.ethertype, dst=src, src=cls.hw_addr))
@@ -106,10 +105,10 @@ class DHCPServer(object):
         ack_pkt.add_protocol(dhcp.dhcp(op=2, chaddr=src,
                                        hlen=6, # salah di len
                                        siaddr=cls.dhcp_server[datapath],
-                                       boot_file=req[0].boot_file,
+                                       boot_file=req.boot_file,
                                        yiaddr=wanted_ip,
-                                       xid=req[0].xid,
-                                       options=req[0].options))
+                                       xid=req.xid,
+                                       options=req.options))
         # cls.logger.info("ASSEMBLED ACK: %s" % ack_pkt)
 
 
@@ -122,7 +121,7 @@ class DHCPServer(object):
         disc_eth = pkt.get_protocol(ethernet.ethernet)
         disc_ipv4 = pkt.get_protocol(ipv4.ipv4)
         disc_udp = pkt.get_protocol(udp.udp)
-        disc = [dhcp.dhcp.parser(pkt[3])[2]]
+        disc = pkt.get_protocol(dhcp.dhcp)
 
         src = disc_eth.src 
         if src in cls.wan_leases[datapath]:
@@ -144,16 +143,15 @@ class DHCPServer(object):
                 cls.wan_offers[datapath][src] = offer
 
         yiaddr = offer
-
-        disc[0].options.option_list.remove(next(opt for opt in disc[0].options.option_list if opt.tag == 55))
-        disc[0].options.option_list.remove(next(opt for opt in disc[0].options.option_list if opt.tag == 53))
-        disc[0].options.option_list.remove(next(opt for opt in disc[0].options.option_list if opt.tag == 12))
-        disc[0].options.option_list.insert(0, dhcp.option(tag=1, value=cls.bin_netmask))
-        disc[0].options.option_list.insert(0, dhcp.option(tag=3, value=addrconv.ipv4.text_to_bin(cls.dhcp_server[datapath])))
-        disc[0].options.option_list.insert(0, dhcp.option(tag=6, value=cls.bin_dns))
-        # disc[0].options.option_list.insert(0, dhcp.option(tag=12, value=cls.hostname))
-        disc[0].options.option_list.insert(0, dhcp.option(tag=53, value='02'.decode('hex')))
-        disc[0].options.option_list.insert(0, dhcp.option(tag=54, value=addrconv.ipv4.text_to_bin(cls.dhcp_server[datapath])))
+        disc.options.option_list.remove(next(opt for opt in disc.options.option_list if opt.tag == 55))
+        disc.options.option_list.remove(next(opt for opt in disc.options.option_list if opt.tag == 53))
+        disc.options.option_list.remove(next(opt for opt in disc.options.option_list if opt.tag == 12))
+        disc.options.option_list.insert(0, dhcp.option(tag=1, value=cls.bin_netmask))
+        disc.options.option_list.insert(0, dhcp.option(tag=3, value=addrconv.ipv4.text_to_bin(cls.dhcp_server[datapath])))
+        disc.options.option_list.insert(0, dhcp.option(tag=6, value=cls.bin_dns))
+        # disc.options.option_list.insert(0, dhcp.option(tag=12, value=cls.hostname))
+        disc.options.option_list.insert(0, dhcp.option(tag=53, value='02'.decode('hex')))
+        disc.options.option_list.insert(0, dhcp.option(tag=54, value=addrconv.ipv4.text_to_bin(cls.dhcp_server[datapath])))
 
         offer_pkt = packet.Packet()
         offer_pkt.add_protocol(ethernet.ethernet(ethertype=disc_eth.ethertype, dst=src, src=cls.hw_addr))
@@ -162,17 +160,16 @@ class DHCPServer(object):
         offer_pkt.add_protocol(dhcp.dhcp(op=2, chaddr=src,
                                          hlen=6, # salah di len
                                          siaddr=cls.dhcp_server[datapath],
-                                         boot_file=disc[0].boot_file,
+                                         boot_file=disc.boot_file,
                                          yiaddr=yiaddr,
-                                         xid=disc[0].xid,
-                                         options=disc[0].options))
+                                         xid=disc.xid,
+                                         options=disc.options))
         # cls.logger.info("ASSEMBLED OFFER: %s" % offer_pkt)
         return offer_pkt
 
     @classmethod
     def get_state(cls, pkt_dhcp):
-	# print(type(pkt_dhcp[2].options.option_list))
-        dhcp_state = ord([opt for opt in pkt_dhcp[2].options.option_list if opt.tag == 53][0].value)
+        dhcp_state = ord([opt for opt in pkt_dhcp.options.option_list if opt.tag == 53][0].value)
         if dhcp_state == 1:
             state = 'DHCPDISCOVER'
         elif dhcp_state == 2:
@@ -214,7 +211,7 @@ class DHCPServer(object):
             _l2_fabric_dhcp()
 
         # print(cls.wan_pool[1][0])
-        pkt_dhcp = dhcp.dhcp.parser(pkt[3])
+        pkt_dhcp = pkt.get_protocols(dhcp.dhcp)[0]
         dhcp_state = cls.get_state(pkt_dhcp)
         # cls.logger.info("NEW DHCP %s PACKET RECEIVED: %s" % (dhcp_state, pkt_dhcp))
         if dhcp_state == 'DHCPDISCOVER':

@@ -261,7 +261,7 @@ class Main(app_manager.RyuApp):
                     # print(disc_udp)
                     return
                 if disc_udp.src_port == 68 and disc_udp.dst_port == 67:
-                    pkt_dhcp = dhcp.dhcp.parser(pkt[3])
+                    pkt_dhcp = pkt.get_protocols(dhcp.dhcp)
                     if not pkt_dhcp:
                         return
                     else:
